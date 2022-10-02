@@ -1,0 +1,120 @@
+module Main where
+
+import Daml.Script
+import DA.List
+import Matrix
+
+-- mark replaced with -1, 0 and 1
+-- data Mark
+--  = N
+--  | O
+--  | X
+-- deriving(Eq, Show)
+
+type Draw = (Int, Int)
+type State = [[Int]]
+
+
+template Player
+  with 
+    user: Party
+    score: Int
+  where
+    signatory user
+    key user : Party
+    maintainer key
+
+
+template GamePropasal
+  with
+    sender: Party
+    reciever: Party
+    text: Text
+  where
+    signatory sender
+    observer reciever
+
+    key (sender, reciever): (Party, Party)
+    maintainer key._1
+
+    choice Accept : ContractId GameSession
+      controller reciever
+      do
+        create GameSession with player1 = sender, player2 = reciever, step = 0, status="play", currentTurn = sender, state = [[0, 0, 0],[0, 0, 0],[0, 0, 0]]
+
+template GameSession
+  with
+    player1: Party
+    player2: Party
+    currentTurn: Party
+    state: State -- player1 - 1 and player2 - -1
+    step: Int
+    status: Text
+  where 
+    signatory player1, player2
+
+    choice Player1Draw: ContractId GameSession
+      with 
+        draw: Draw
+      controller player1
+      do 
+      let 
+        i: Int = draw._1
+        j: Int = draw._2
+        currentMark: Int = state!!(i-1)!!(j-1)
+
+      assertMsg "This coordinate is already marked" (currentMark == 0)
+      assertMsg "Coordinate is not correct! " ( 0<i && i<=3 && 0<j && j<=3)
+      assertMsg "It is not your turn" (currentTurn == player1)    
+
+      -- check and create new state
+      -- TODO
+      let newState = updateElem 1 state i j
+      let suc = check newState 
+
+      create this with state = newState, step = step + 1, currentTurn = player2
+  
+     
+
+    choice Player2Draw: ContractId GameSession
+      with 
+        draw: Draw
+      controller player2
+      do 
+
+      let 
+        i: Int = draw._1
+        j: Int = draw._2
+        currentMark: Int = state!!(i-1)!!(j-1)
+
+      assertMsg "This coordinate is already marked" (currentMark == 0)    
+      assertMsg "It is not your turn" (currentTurn == player2)    
+      assertMsg "Coordinate is not correct! " ( 0<i && i<=3 && 0<j && j<=3)
+      assertMsg "There is not way to move" (step /= 9)
+      -- check and create new state
+      -- TODO
+      let newState = updateElem (-1) state i j
+      let suc = check newState 
+      create if suc then 
+       this with state = newState, step = step + 1, currentTurn = player1
+      else  this with state = newState, step = step +1, currentTurn = player1, status = "finished"
+      
+
+name : Script (ContractId GameSession)
+name = script do
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bob"
+  submit alice $ createCmd $ Player with user = alice, score = 0
+  submit bob $ createCmd $ Player with user = bob, score = 0
+  
+  propasalCid <- submit alice $ createCmd $ GamePropasal with sender = alice, reciever = bob, text="let's game together"
+  gameSCid <- submit bob $ exerciseCmd propasalCid $ Accept
+  gameSCid <- submit alice $ exerciseCmd gameSCid $ Player1Draw with draw = (1, 1)  
+  gameSCid <- submit bob $ exerciseCmd gameSCid $ Player2Draw with draw = (1, 2)  
+  gameSCid <- submit alice $ exerciseCmd gameSCid $ Player1Draw with draw = (2, 2)  
+  gameSCid <- submit bob $ exerciseCmd gameSCid $ Player2Draw with draw = (1, 3)  
+  gameSCid <- submit alice $ exerciseCmd gameSCid $ Player1Draw with draw = (3, 3)  
+  debug $ map (\x -> x*x)  [1,2,3]
+  return (gameSCid)
+
+  

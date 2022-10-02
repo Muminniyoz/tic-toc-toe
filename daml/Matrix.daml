@@ -1,0 +1,52 @@
+module Matrix where
+
+import Daml.Script
+import DA.List
+
+updateElem : a -> [[a]] -> Int -> Int-> [[a]]
+updateElem elem list i j
+ | (i <= 0 || j <= 0)            = list
+ | (i <= len && j <= len) = let a = take (i-1) list; b = drop (i) list; c = list!!(i-1); d = take (j-1) c; k = drop (j) c  in a ++ ((d ++ (elem::k)))::b
+ | otherwise             = list
+  where len = length list
+
+
+gorizontalCheck : [[Int]] -> Bool 
+gorizontalCheck (x::xs) =  let ss = sum x
+                            in ((ss == 3 || ss == -3) || (if null xs then False else gorizontalCheck xs))
+
+
+verticalCheck : [[Int]] -> Bool 
+verticalCheck matrix = do 
+                          let  
+                              ss = sum (map head matrix) 
+                            in  (ss == 3 || ss == -3) || (if (length (head matrix) <=1) then False else verticalCheck (map (\row -> drop 1 row) matrix)) 
+                  
+
+dioganalCheck : [[Int]] -> Bool 
+dioganalCheck matrix = let pm = primaryDiagonalCheck matrix; sm =  secondaryDiagonalCheck matrix
+                          in pm == 3 || pm == -3 || sm == 3 || sm == -3
+
+
+primaryDiagonalCheck : [[Int]] -> Int 
+primaryDiagonalCheck (row::matrix) = (head row) + (if null matrix then 0 else  primaryDiagonalCheck $ (map (\row -> drop 1 $ row) matrix))
+                                      
+secondaryDiagonalCheck : [[Int]] -> Int 
+secondaryDiagonalCheck (row::matrix) = (head $ reverse row) + (if null matrix then 0 else  secondaryDiagonalCheck $ (map (\row -> reverse (drop 1 $ reverse row)) matrix))
+                                      
+
+check : [[Int]] -> Bool
+check matrix = gorizontalCheck matrix || verticalCheck matrix || dioganalCheck matrix
+
+                                        
+
+-- name : Script ()
+-- name = script do
+--   let matrix = [[1,0,-1],
+--                 [-1,1,-1],
+--                 [-1,0,1]]
+--   debug $ secondaryDiagonalCheck matrix
+
+
+--   pure()
+
